@@ -1,32 +1,152 @@
-# Prerequisites
-*.d
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <cmath>
+#include <ctime>
+#include <cstdlib>
+#include <random>
+#include <SFML/Graphics.hpp>
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+using namespace std;
 
-# Precompiled Headers
-*.gch
-*.pch
+struct Point {
+    int x, y;
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+    bool operator==(const Point& other) const {
+        return (x == other.x) && (y == other.y);
+    }
+};
 
-# Fortran module files
-*.mod
-*.smod
+// Функция расчета расстояния между двумя точками
+double calculateDistance(const Point& a, const Point& b) {
+    int dx = a.x - b.x;
+    int dy = a.y - b.y;
+    return std::sqrt(dx * dx + dy * dy);
+}
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
+// Функция расчета общего расстояния маршрута, проходящего через все точки
+double calculateTotalDistance(const std::vector<Point>& route) {
+    double totalDistance = 0;
+    for (size_t i = 0; i < route.size() - 1; ++i) {
+        totalDistance += calculateDistance(route[i], route[i + 1]);
+    }
+    totalDistance += calculateDistance(route.back(), route.front());
+    return totalDistance;
+}
 
-# Executables
-*.exe
-*.out
-*.app
+// Функция отрисовки маршрута
+void drawRoute(const std::vector<Point>& route) {
+    sf::RenderWindow window(sf::VideoMode(800, 600), "Route");
+    window.clear(sf::Color::White);
+
+    // Преобразование точек в графические объекты
+    std::vector<sf::CircleShape> circles;
+    for (const Point& point : route) {
+        sf::CircleShape circle(5);
+        circle.setFillColor(sf::Color::Black);
+        circle.setPosition(point.x, point.y);
+        circles.push_back(circle);
+    }
+
+    // Отрисовка точек и соединяющих линий
+    for (size_t i = 0; i < circles.size(); ++i) {
+        const sf::CircleShape& currentCircle = circles[i];
+        const sf::CircleShape& nextCircle = circles[(i + 1) % circles.size()];
+
+        sf::Vertex line[] = {
+            sf::Vertex(sf::Vector2f(currentCircle.getPosition().x + 5, currentCircle.getPosition().y + 5)),
+            sf::Vertex(sf::Vector2f(nextCircle.getPosition().x + 5, nextCircle.getPosition().y + 5))
+        };
+        window.draw(line, 2, sf::Lines);
+
+        window.draw(currentCircle);
+    }
+
+    window.display();
+
+    // Ожидание закрытия окна
+    while (window.isOpen()) {
+        sf::Event event;
+        while (window.pollEvent(event)) {
+            if (event.type == sf::Event::Closed)
+                window.close();
+        }
+    }
+}
+
+int main() {
+    srand(time(0));
+
+    const int populationSize = 100;
+    const int generations = 1000;
+    const int pointsCount = 10;
+
+    std::vector<Point> points = {
+        {1, 1}, {6, 1}, {7, 3}, {3, 5}, {9, 5}, {10, 3}, {2, 6}, {4, 8}, {8, 7}, {6, 10}
+    };
+
+    // Создание начальной популяции случайным образом
+    std::vector<std::vector<Point>> population;
+
+    for (int i = 0; i < populationSize; ++i) {
+        std::vector<Point> individual(points);
+        std::shuffle(individual.begin(), individual.end(), std::default_random_engine(std::random_device()()));
+        population.push_back(individual);
+    }
+
+    // Главный цикл, в котором проводится эволюция популяции
+    for (int generation = 0; generation < generations; ++generation) {
+        // Сортировка популяции по возрастанию расстояния между точками
+        std::sort(population.begin(), population.end(), [](const std::vector<Point>& a, const std::vector<Point>& b) {
+            return calculateTotalDistance(a) < calculateTotalDistance(b);
+        });
+
+        // Создание новой популяции на основе предыдущей
+        std::vector<std::vector<Point>> newPopulation;
+        newPopulation.reserve(populationSize);
+
+        // Создание пар родителей и создание двух потомков
+        for (int i = 0; i < populationSize / 2; ++i) {
+            std::vector<Point> parent1 = population[i];
+            std::vector<Point> parent2 = population[rand() % (populationSize / 2)];
+            size_t crossoverPoint = rand() % (pointsCount - 2) + 1;
+
+            std::vector<Point> child1(parent1.begin(), parent1.begin() + crossoverPoint);
+            std::vector<Point> child2(parent2.begin(), parent2.begin() + crossoverPoint);
+
+            // Добавление оставшихся точек в потомков
+            for (size_t j = 0; j < pointsCount; ++j) {
+                if (std::find(child1.begin(), child1.
+end(), parent2[j]) == child1.end()) {
+                    child1.push_back(parent2[j]);
+                }
+                if (std::find(child2.begin(), child2.end(), parent1[j]) == child2.end()) {
+                    child2.push_back(parent1[j]);
+                }
+            }
+
+            // Добавление детей в новое поколение
+            newPopulation.push_back(child1);
+            newPopulation.push_back(child2);
+        }
+
+        population = newPopulation;
+    }
+
+    // Сортировка популяции по возрастанию расстояния между точками
+    std::sort(population.begin(), population.end(), [](const std::vector<Point>& a, const std::vector<Point>& b) {
+        return calculateTotalDistance(a) < calculateTotalDistance(b);
+    });
+
+    // Вывод наименьшего расстояния и маршрута, соответствующего этому расстоянию
+    std::cout << "Shortest route found: ";
+    for (const Point& point : population.front()) {
+        std::cout << "(" << point.x << ", " << point.y << ") ";
+    }
+    std::cout << "\nTotal distance: " << calculateTotalDistance(population.front()) << "\n";
+
+    // Прорисовка маршрута
+    drawRoute(population.front());
+
+    return 0;
+}
